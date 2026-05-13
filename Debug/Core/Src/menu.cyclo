@@ -1,0 +1,17 @@
+../Core/Src/menu.c:82:13:invert_bmp	2
+../Core/Src/menu.c:85:13:maybe_invert	2
+../Core/Src/menu.c:88:13:cgram_write	1
+../Core/Src/menu.c:95:13:print_label	2
+../Core/Src/menu.c:112:16:name_char_index	2
+../Core/Src/menu.c:120:6:Screen_MainMenu	3
+../Core/Src/menu.c:170:6:Screen_AddPlantName	3
+../Core/Src/menu.c:191:6:Screen_AddPlantType	2
+../Core/Src/menu.c:211:6:Screen_AddPlantFreq	3
+../Core/Src/menu.c:252:6:Screen_PlantsList	2
+../Core/Src/menu.c:282:16:map_raw_to_pct	7
+../Core/Src/menu.c:297:6:Screen_PlantStats	2
+../Core/Src/menu.c:323:6:Screen_PlantFreqEdit	3
+../Core/Src/menu.c:362:6:Screen_WaterLevel	5
+../Core/Src/menu.c:388:6:Menu_Init	1
+../Core/Src/menu.c:410:17:read_joy	5
+../Core/Src/menu.c:422:6:Menu_Update	110
