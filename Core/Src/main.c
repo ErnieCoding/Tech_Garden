@@ -40,19 +40,12 @@ uint16_t soil_filtered = 0;
 uint32_t last_keepalive_tick = 0;
 
 /*
- * ── ADC channel → Arduino pin mapping for B-L475E-IOT01A2 ──────────────
- *   Rank 1  Ch14  PC5  A0  → VRX  (joystick X)
- *   Rank 2  Ch13  PC4  A1  → VRY  (joystick Y)
- *   Rank 3  Ch4   PC3  A2  → Soil moisture sensor
- *   Rank 4  Ch3   PC2  A3  → Water level sensor
- *
  * ── Sensor thresholds ──────────────────────────────────────────────────
  *   Resistive soil sensors: HIGH ADC = DRY, LOW ADC = WET.
  *   Resistive water sensors: HIGH ADC = MORE WATER.
- *   Adjust both thresholds after reading the raw ADC on the water screen.
  */
-#define SOIL_DRY_THRESHOLD    180u   /* soil_raw above this → dry        */
-#define PUMP_ON_DURATION_MS   3000u   /* ms per pump activation           */
+#define SOIL_DRY_THRESHOLD    180u
+#define PUMP_ON_DURATION_MS   3000u
 #define WATER_FULL_THRESH 850u
 #define WATER_LOW_THRESH  250u
 
@@ -64,8 +57,6 @@ void SystemClock_Config(void);
 
 /* USER CODE BEGIN 0 */
 
-/* ── RGB LED (common-cathode, SET = ON) ────────────────────────────────
- * main.h:  LED_R = PA1,  LED_G = PA0,  LED_B = PB0               */
 static inline void rgb_set(uint8_t r, uint8_t g, uint8_t b)
 {
     HAL_GPIO_WritePin(LED_R_GPIO_Port, LED_R_Pin, r ? GPIO_PIN_SET : GPIO_PIN_RESET);
@@ -79,22 +70,9 @@ static inline void pump_on (void)
 static inline void pump_off(void)
 { HAL_GPIO_WritePin(RELAY_GPIO_Port, RELAY_Pin, GPIO_PIN_RESET); }
 
-/* ── ADC polling helper ────────────────────────────────────────────────
- *
- * ROOT CAUSE of water/soil always reading 0:
- *   With ADC_OVR_DATA_PRESERVED + EOC_SINGLE_CONV, an overrun flag (OVR)
- *   left over from a previous sequence will cause PollForConversion to
- *   time out silently on every subsequent call.  The if() guard then
- *   fails and the variable is never updated (stays 0).
- *
- * Fix:
- *   1. HAL_ADCEx_Calibration_Start() once at boot (removes gain error).
- *   2. __HAL_ADC_CLEAR_FLAG(OVR) before every Start.
- *   3. After Stop, clear OVR again so the next cycle is clean.
- */
+/* ── ADC polling helper ──*/
 static void read_all_adc(void)
 {
-    /* Clear any stale overrun flag before starting */
     __HAL_ADC_CLEAR_FLAG(&hadc1, ADC_FLAG_OVR);
 
     HAL_ADC_Start(&hadc1);
@@ -117,7 +95,6 @@ static void read_all_adc(void)
 
     HAL_ADC_Stop(&hadc1);
 
-    /* Clear OVR after Stop so it doesn't bleed into the next cycle */
     __HAL_ADC_CLEAR_FLAG(&hadc1, ADC_FLAG_OVR);
 }
 
@@ -136,7 +113,6 @@ int main(void)
     rgb_off();
     HAL_Delay(100);
 
-    /* Self-calibration — must run before first HAL_ADC_Start */
     HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED);
 
     hlcd = Lcd_create(lcd_data_ports, lcd_data_pins,
@@ -144,7 +120,6 @@ int main(void)
                       LCD_EN_GPIO_Port, LCD_EN_Pin,
                       LCD_4_BIT_MODE);
 
-    /* Drain first conversion so rank registers are stable */
     read_all_adc();
 
     Menu_Init(&ui, &hlcd);
@@ -154,8 +129,8 @@ int main(void)
     while (1)
     {
 /* USER CODE BEGIN WHILE */
-        /* 1. Read all four ADC channels */
-        read_all_adc();
+
+    	read_all_adc();
 
         if (soil_filtered == 0u)
         {
@@ -165,6 +140,8 @@ int main(void)
         {
             soil_filtered = (uint16_t)((soil_filtered * 7u + (uint16_t)soil_raw) / 8u);
         }
+
+        /* Sensor readings tests: Joystick axis, Water level, soil moisture */
 
 //        char l0[17];
 //		char l1[17];
@@ -181,18 +158,12 @@ int main(void)
 //		HAL_Delay(250);
 //		continue;
 
-        /* 2. Joystick button — active LOW, internal pull-up */
         uint8_t btn = (HAL_GPIO_ReadPin(JOY_SW_GPIO_Port, JOY_SW_Pin)
                        == GPIO_PIN_RESET) ? 1u : 0u;
 
-        /* 3. Hand sensor values to UI */
         ui.water_adc_raw = (uint16_t)water_raw;
         ui.soil_adc_raw  = soil_filtered;
 
-        /* 4. Per-plant watering logic
-         *    Frequency timer gates the check; soil sensor gates the pump.
-         *    If soil is already moist at schedule time, we skip watering
-         *    but still reset the timer so the cadence stays regular. */
         if (ui.plant_count > 0)
         {
             uint32_t now = HAL_GetTick();
@@ -204,10 +175,10 @@ int main(void)
                 uint32_t interval_ms = p->watering_interval_sec * 1000u;
                 if ((now - p->last_watered_tick) >= interval_ms)
                 {
-                    p->last_watered_tick = HAL_GetTick();   /* reset regardless */
+                    p->last_watered_tick = HAL_GetTick();
                     if ((DEMO_FORCE_WATERING) || (soil_filtered < SOIL_DRY_THRESHOLD))
                     {
-                        rgb_set(0,0,1);                     /* blue = watering  */
+                        rgb_set(0,0,1);
                         pump_on();
                         HAL_Delay(PUMP_ON_DURATION_MS);
                         pump_off();
@@ -217,26 +188,19 @@ int main(void)
             }
         }
 
-        /* 5. RGB water-level status
-         *    If your sensor reads HIGH when empty and LOW when full,
-         *    invert the conditions below. */
-        if      (water_raw >= WATER_FULL_THRESH) rgb_set(0,1,0); /* green  */
-        else if (water_raw >= WATER_LOW_THRESH)  rgb_set(1,1,0); /* orange */
-        else                                     rgb_set(1,0,0); /* red    */
+        if (water_raw >= WATER_FULL_THRESH) rgb_set(0,1,0);
+        else if (water_raw >= WATER_LOW_THRESH) rgb_set(1,1,0);
+        else rgb_set(1,0,0);
 
-        /* 6. UI state machine */
-        Menu_Update(&ui, &hlcd,
-                    (uint16_t)joy_x_raw,
-                    (uint16_t)joy_y_raw,
-                    btn);
+
+        Menu_Update(&ui, &hlcd, (uint16_t)joy_x_raw, (uint16_t)joy_y_raw, btn);
 
         HAL_Delay(50);
 /* USER CODE END WHILE */
 
 /* USER CODE BEGIN 3 */
-        /* Keepalive: 200 ms red blink every 10 s */
-        if ((HAL_GetTick() - last_keepalive_tick) >= 10000u)
-        {
+        /* Keepalive for powerbank: 200 ms red blink every 10 s */
+        if ((HAL_GetTick() - last_keepalive_tick) >= 10000u){
             rgb_off();
             rgb_set(1,0,0);
             HAL_Delay(200);

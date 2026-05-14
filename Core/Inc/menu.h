@@ -9,7 +9,7 @@
 
 /* ── Configuration ──────────────────────────────────────────────────────── */
 #define MAX_PLANTS        4
-#define PLANT_NAME_LEN   10    /* max chars, not counting null terminator   */
+#define PLANT_NAME_LEN   10
 
 #define JOY_LEFT_THRESH   1500u
 #define JOY_RIGHT_THRESH  2500u
@@ -44,7 +44,7 @@ typedef struct {
     PlantType_t type;
     uint32_t    watering_interval_sec;
     uint8_t     active;
-    uint32_t    last_watered_tick;   /* HAL_GetTick() value when last watered */
+    uint32_t    last_watered_tick;
 } Plant_t;
 
 /* ── Screen IDs ─────────────────────────────────────────────────────────── */
@@ -84,7 +84,7 @@ typedef struct {
     /* Frequency picker (shared by add-wizard and freq-edit screens) */
     uint32_t    new_freq_value;
     TimeUnit_t  new_freq_unit;
-    uint8_t     freq_editing_value;   /* legacy field, kept for ABI compat  */
+    uint8_t     freq_editing_value;  */
 
     /* Water level sensor — updated by main.c every loop iteration */
     uint16_t    water_adc_raw;

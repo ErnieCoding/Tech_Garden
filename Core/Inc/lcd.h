@@ -94,6 +94,7 @@ Lcd_HandleTypeDef Lcd_create(
 void Lcd_define_char(Lcd_HandleTypeDef * lcd, uint8_t code, uint8_t bitmap[]);
 void Lcd_clear(Lcd_HandleTypeDef * lcd);
 
+/* Drawing helpers */
 void Lcd_write_char(Lcd_HandleTypeDef *lcd, uint8_t cgram_slot);
 void Lcd_write_data(Lcd_HandleTypeDef *lcd, uint8_t data);
 

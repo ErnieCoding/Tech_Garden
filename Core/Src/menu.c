@@ -1,39 +1,6 @@
 /*
- * menu.c — Plant Watering System UI (B-L475E-IOT01A2)
+ * menu.c — Plant Watering System UI
  *
- * ── Changelog ──────────────────────────────────────────────────────────────
- *
- * FIX A – Name entry: UP/DOWN cycles chars, but was non-functional
- *   Root cause: sub_cursor==0 branch correctly ran UP/DOWN, BUT the
- *   debounce timer (JOY_DEBOUNCE_MS=200ms) was shared with the outer
- *   Menu_Update gate.  Each UP/DOWN on the name screen consumed the debounce
- *   window, so rapid cycling felt sluggish but was still functional.
- *   The real bug in this release: new_name was seeded uppercase (PLANT1), so
- *   name_char_index found 'P' correctly.  No change needed here — confirmed OK.
- *
- * FIX B – Watering frequency value capped at 999; unit cycles sec/min/hr/day/wk
- *   Previous release: value range 1-999, units TUNIT_SEC..TUNIT_WEEKS — correct.
- *   This release: confirmed correct, no change needed.
- *
- * FIX C – MAX_PLANTS capacity enforcement was broken
- *   Root cause: Screen_MainMenu renders the + icon grayed-out when at_cap,
- *   BUT Menu_Update SCREEN_MAIN_MENU case 0 only checks (plant_count < MAX_PLANTS)
- *   before entering the wizard.  The bug was that the joystick button press was
- *   being consumed even at capacity and silently doing nothing, leaving the user
- *   confused.  The previous code DID have the guard but did NOT fall through to
- *   a visual "full" feedback — the screen simply didn't change.
- *   FIX: when at capacity and the user presses the button on menu_index==0,
- *   explicitly show a "Full (N/N)" message on the LCD for 1 second, then
- *   redraw the main menu.  This confirms the guard is active.
- *
- * FIX D – Plant type screen: UP/DOWN should cycle types (not just LEFT/RIGHT)
- *   Previous: only JOY_LEFT/RIGHT cycled plant type.
- *   Fix: UP/DOWN also cycle plant type (same as L/R), consistent with freq screen.
- *
- * FIX E – Frequency screen: value range is 1-99 (per user spec)
- *   Previous: value capped at 999.
- *   Fix: clamp new_freq_value to 1..99.
- *   Units: sec, min, hr, day, wk (TUNIT_SEC..TUNIT_WEEKS — already 5 units, correct).
  *
  * ── sub_cursor map ─────────────────────────────────────────────────────────
  *   SCREEN_ADD_PLANT_NAME  : 0=name edit, 1=OK, 2=Del
@@ -89,9 +56,7 @@ static void cgram_write(Lcd_HandleTypeDef *lcd, uint8_t slot) {
     Lcd_write_data(lcd, slot);
 }
 
-/* ── print_label ────────────────────────────────────────────────────────────
- * hi=1 → ">TEXT<"   hi=0 → " TEXT "
- * w = minimum field width for TEXT */
+
 static void print_label(Lcd_HandleTypeDef *lcd,
                         const char *text, uint8_t hi, uint8_t w)
 {
@@ -104,8 +69,6 @@ static void print_label(Lcd_HandleTypeDef *lcd,
     Lcd_string(lcd, buf);
 }
 
-/* ── NAME_CHARS + index helper ─────────────────────────────────────────────
- * Uppercase A-Z, digits 0-9, underscore, space. */
 static const char NAME_CHARS[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_ ";
 #define NAME_CHARS_LEN (sizeof(NAME_CHARS) - 1)
 
@@ -213,11 +176,9 @@ void Screen_AddPlantFreq(UI_t *ui, Lcd_HandleTypeDef *lcd)
     Lcd_clear(lcd);
     Lcd_cursor(lcd,0,0); Lcd_string(lcd,"Water every:");
     Lcd_cursor(lcd,0,13);
+
     /* Row 0 right side: OK / BK */
     print_label(lcd,"OK",(ui->sub_cursor==2),2);
-    /* Row 0 far-right: BK (fits in col 13..15 as ">BK<" = 4 chars, so start at 12) */
-    /* Layout: col 0-12 = "Water every:", col 12=OK(4), col 0-3=BK — need two rows */
-    /* Use row 1 right-hand side for BK label instead */
 
     /* Row 1: [>VAL<] [>UNIT<]  on left; BK on far right */
     Lcd_cursor(lcd,1,0);
@@ -307,7 +268,8 @@ void Screen_PlantStats(UI_t *ui, Lcd_HandleTypeDef *lcd)
     print_label(lcd,"SET",(ui->sub_cursor==0),3);
 
     /* Resistive soil sensor: HIGH ADC = DRY → invert to get moisture % */
-//    uint8_t raw_pct = (uint8_t)((uint32_t)ui->soil_adc_raw * 100u / 4095u);
+//    uint8_t raw_pct = (uint8_t)((uint32_t)ui->soil_adc_raw * 100u / 4095u); // OLD CONVERSION
+
     uint8_t moist = map_raw_to_pct(ui->soil_adc_raw, SOIL_DRY_RAW, SOIL_WET_RAW);
     char line1[17];
     snprintf(line1, sizeof(line1), "Moist:%3d%%  ", moist);
@@ -388,16 +350,16 @@ void Screen_WaterLevel(UI_t *ui, Lcd_HandleTypeDef *lcd, uint16_t water_adc_raw)
 void Menu_Init(UI_t *ui, Lcd_HandleTypeDef *lcd)
 {
     memset(ui, 0, sizeof(UI_t));
-    ui->screen            = SCREEN_MAIN_MENU;
-    ui->menu_index        = 1;          /* start cursor on the plant icon */
-    ui->new_freq_value    = 7;
-    ui->new_freq_unit     = TUNIT_DAYS;
-    ui->sub_cursor        = 0;
+    ui->screen = SCREEN_MAIN_MENU;
+    ui->menu_index = 1;
+    ui->new_freq_value = 7;
+    ui->new_freq_unit = TUNIT_DAYS;
+    ui->sub_cursor = 0;
     ui->water_needs_redraw= 1;
-    ui->water_last_pct    = 255;
+    ui->water_last_pct = 255;
 
     snprintf(ui->new_name, sizeof(ui->new_name), "PLANT1");
-    ui->new_name_char = ui->new_name[0]; /* 'P' — present in NAME_CHARS */
+    ui->new_name_char = ui->new_name[0];
 
     Screen_MainMenu(ui, lcd);
 }
@@ -409,15 +371,16 @@ typedef enum { JOY_NONE,JOY_LEFT,JOY_RIGHT,JOY_UP,JOY_DOWN } JoyDir_t;
 
 static JoyDir_t read_joy(uint16_t x, uint16_t y)
 {
-    if (x < JOY_LEFT_THRESH)  return JOY_LEFT;
+    if (x < JOY_LEFT_THRESH) return JOY_LEFT;
     if (x > JOY_RIGHT_THRESH) return JOY_RIGHT;
-    if (y > JOY_DOWN_THRESH)  return JOY_UP;    /* high voltage = physically UP   */
-    if (y < JOY_UP_THRESH)    return JOY_DOWN;  /* low  voltage = physically DOWN */
+    if (y > JOY_DOWN_THRESH) return JOY_UP;
+    if (y < JOY_UP_THRESH) return JOY_DOWN;
+
     return JOY_NONE;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
- * Menu_Update — call from main loop every ~50 ms
+ * Menu_Update
  * ═══════════════════════════════════════════════════════════════════════════ */
 void Menu_Update(UI_t *ui, Lcd_HandleTypeDef *lcd,
                  uint16_t joy_x, uint16_t joy_y, uint8_t joy_btn)
@@ -453,7 +416,6 @@ void Menu_Update(UI_t *ui, Lcd_HandleTypeDef *lcd,
                     ui->screen         = SCREEN_ADD_PLANT_NAME;
                     Screen_AddPlantName(ui, lcd);
                 } else {
-                    /* FIX C: show "Full X/X" feedback instead of silently ignoring */
                     Lcd_clear(lcd);
                     Lcd_cursor(lcd,0,0); Lcd_string(lcd,"  Plants full!  ");
                     char fbuf[17];
@@ -556,7 +518,6 @@ void Menu_Update(UI_t *ui, Lcd_HandleTypeDef *lcd,
     case SCREEN_ADD_PLANT_TYPE:
     {
         if (ui->sub_cursor == 0) {
-            /* FIX D: UP/DOWN also cycle types (same as LEFT/RIGHT) */
             if (dir == JOY_LEFT || dir == JOY_DOWN) {
                 ui->new_type = (PlantType_t)((ui->new_type - 1 + PLANT_TYPE_COUNT) % PLANT_TYPE_COUNT);
                 Screen_AddPlantType(ui, lcd);
@@ -564,7 +525,6 @@ void Menu_Update(UI_t *ui, Lcd_HandleTypeDef *lcd,
                 ui->new_type = (PlantType_t)((ui->new_type + 1) % PLANT_TYPE_COUNT);
                 Screen_AddPlantType(ui, lcd);
             } else if (joy_btn) {
-                /* Confirm type → go to frequency screen */
                 uint32_t def = PLANT_DEFAULT_INTERVAL_SEC[ui->new_type] / 86400UL;
                 ui->new_freq_value = (def < FREQ_VAL_MIN) ? FREQ_VAL_MIN :
                                      (def > FREQ_VAL_MAX) ? FREQ_VAL_MAX : def;
@@ -574,7 +534,6 @@ void Menu_Update(UI_t *ui, Lcd_HandleTypeDef *lcd,
                 Screen_AddPlantFreq(ui, lcd);
             }
         } else {
-            /* BCK label highlighted */
             if (dir != JOY_NONE) {
                 ui->sub_cursor = 0;
                 Screen_AddPlantType(ui, lcd);
@@ -723,7 +682,6 @@ void Menu_Update(UI_t *ui, Lcd_HandleTypeDef *lcd,
     case SCREEN_PLANT_STATS:
     {
         if (ui->plant_count == 0) { ui->screen = SCREEN_MAIN_MENU; Screen_MainMenu(ui,lcd); break; }
-        /* Redraw on every call so soil moisture stays live */
         Screen_PlantStats(ui, lcd);
         if (dir == JOY_LEFT || dir == JOY_RIGHT) {
             ui->sub_cursor = (ui->sub_cursor == 0) ? 1 : 0;
@@ -822,7 +780,6 @@ void Menu_Update(UI_t *ui, Lcd_HandleTypeDef *lcd,
         if (new_pct != ui->water_last_pct) ui->water_needs_redraw = 1;
         Screen_WaterLevel(ui, lcd, ui->water_adc_raw);
 
-        /* Only exit on button press — joystick movement intentionally ignored */
         if (joy_btn) {
             ui->water_needs_redraw = 1;
             ui->sub_cursor         = 0;
