@@ -132,12 +132,10 @@ int main(void)
 
     	read_all_adc();
 
-        if (soil_filtered == 0u)
-        {
+        if (soil_filtered == 0u) {
             soil_filtered = (uint16_t)soil_raw;
         }
-        else
-        {
+        else {
             soil_filtered = (uint16_t)((soil_filtered * 7u + (uint16_t)soil_raw) / 8u);
         }
 
@@ -164,20 +162,18 @@ int main(void)
         ui.water_adc_raw = (uint16_t)water_raw;
         ui.soil_adc_raw  = soil_filtered;
 
-        if (ui.plant_count > 0)
-        {
+        if (ui.plant_count > 0) {
             uint32_t now = HAL_GetTick();
-            for (uint8_t i = 0; i < ui.plant_count; i++)
-            {
+            for (uint8_t i = 0; i < ui.plant_count; i++) {
                 Plant_t *p = &ui.plants[i];
-                if (!p->active) continue;
+
+                if (!p->active)
+                	continue;
 
                 uint32_t interval_ms = p->watering_interval_sec * 1000u;
-                if ((now - p->last_watered_tick) >= interval_ms)
-                {
+                if ((now - p->last_watered_tick) >= interval_ms) {
                     p->last_watered_tick = HAL_GetTick();
-                    if ((DEMO_FORCE_WATERING) || (soil_filtered < SOIL_DRY_THRESHOLD))
-                    {
+                    if ((DEMO_FORCE_WATERING) || (soil_filtered < SOIL_DRY_THRESHOLD)) {
                         rgb_set(0,0,1);
                         pump_on();
                         HAL_Delay(PUMP_ON_DURATION_MS);
@@ -188,9 +184,13 @@ int main(void)
             }
         }
 
-        if (water_raw >= WATER_FULL_THRESH) rgb_set(0,1,0);
-        else if (water_raw >= WATER_LOW_THRESH) rgb_set(1,1,0);
-        else rgb_set(1,0,0);
+        /* Water level indicator through RGB LED */
+        if (water_raw >= WATER_FULL_THRESH)
+        	rgb_set(0,1,0);
+        else if (water_raw >= WATER_LOW_THRESH)
+        	rgb_set(1,1,0);
+        else
+        	rgb_set(1,0,0);
 
 
         Menu_Update(&ui, &hlcd, (uint16_t)joy_x_raw, (uint16_t)joy_y_raw, btn);
